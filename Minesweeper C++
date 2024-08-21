@@ -1,0 +1,289 @@
+#include<iostream>
+#include<vector>
+#include<string>
+#include<ctime>
+#include<cstdlib>
+
+using namespace std;
+
+class Cell {
+public:
+    virtual void flag() = 0;
+    virtual void expose() = 0;
+    virtual void setMine() = 0;
+    virtual void incrementAdjacentMines() = 0;
+    virtual bool hasMine() = 0;
+    virtual bool hasFlag() = 0;
+    virtual bool isCellExposed() = 0;
+    virtual int getAdjacentMines() = 0;
+};
+
+class MineCell : public Cell {
+public:
+    bool isMine;
+    bool isExposed;
+    bool isFlagged;
+    int adjacentMines;
+
+    MineCell() : isMine(false), isExposed(false), isFlagged(false), adjacentMines(0) {}
+
+	// to flag a current place
+	
+    void flag() override {
+        if (!isExposed) {
+            isFlagged = !isFlagged;
+        }
+    }
+	
+	// to check if a placeholder isnt flagged then expose it
+    void expose() override {
+        if (!isFlagged) {
+            isExposed = true;
+        }
+    }
+
+	// to set mine
+    void setMine() override {
+        isMine = true;
+    }
+
+	// to indicate that they have mine nearby
+    void incrementAdjacentMines() override {
+        adjacentMines++;
+    }
+
+	// to indicate that here is a mine
+    bool hasMine() override {
+        return isMine;
+    }
+
+	// to see if a place is flagged
+    bool hasFlag() override {
+        return isFlagged;
+    }
+
+	// to see if a place is exposed
+    bool isCellExposed() override {
+        return isExposed;
+    }
+
+	// to get adjacent mines
+    int getAdjacentMines() override {
+        return adjacentMines;
+    }
+};
+class Board {
+public:
+	
+	// 2 d dynamic array to for ease
+    vector<vector<Cell*> > cells;
+    int rows, cols;
+
+    Board(int rows, int cols) : rows(rows), cols(cols) {
+    	// 2d pointers array of pointers to objects of cell
+        cells = vector<vector<Cell*> >(rows, vector<Cell*>(cols));
+        for(int i=0; i<rows; i++){
+            for(int j=0; j<cols; j++){
+            	// new mine ceell objectg for every row and column
+                cells[i][j] = new MineCell();
+            }
+        }
+    }
+
+	// avoiding memory leak so deleting all dynamically allocated cells
+    ~Board() {
+        for(int i=0; i<rows; i++){
+            for(int j=0; j<cols; j++){
+                delete cells[i][j];
+            }
+        }
+    }
+
+    void placeMines(int numMines) {
+        srand(time(0)); 
+        // loop for placing target mines according to difficulty level 10 for 1, 40 for 2, 3 for 99
+        for (int i = 0; i < numMines; i++) {
+        	// assigns a random number between 0 and number of rows
+            int r = rand() % rows;
+            // assigns a random number between 0 and number of columns
+            int c = rand() % cols;
+            // if the target doesnt has a mine already then set a mine, and then use increment mines to expose nearby mines
+            if (!cells[r][c]->hasMine()) {
+                cells[r][c]->setMine();
+                // this increments the mines to reveal correct adjacent mines to target cell
+                incrementAdjacentMines(r, c);
+            } else {
+            	// already has a mine so chose another random place
+                i--; 
+            }
+        }
+    }
+	
+	// this is used to tell how many mines are there adjacent to the target cell
+    void incrementAdjacentMines(int row, int col) {
+    	// iterates through in the surrounding cells of the target cell row wise
+        for (int i = max(0, row - 1); i <= min(rows - 1, row + 1); i++) {
+        	// iterates through in the surrounding cells of the target cell column wise
+            for (int j = max(0, col - 1); j <= min(cols - 1, col + 1); j++) {
+            	// if target cell isnt out of index and doesnt has a mine then run inc adjacent mines to expose neaby mines
+                if (!(i == row && j == col) && !cells[i][j]->hasMine()) {
+                    cells[i][j]->incrementAdjacentMines();
+                }
+            }
+        }
+    }
+
+    void exposeCell(int row, int col) {
+    	// check if the row, column is within range and cell isnt exposed
+        if (row >= 0 && row < rows && col >= 0 && col < cols && !cells[row][col]->isCellExposed()) {
+        	// if not then expose the cell
+            cells[row][col]->expose();
+            if (cells[row][col]->getAdjacentMines() == 0) {
+            	// checks for exposing cells up, down, left and right 
+                for (int i = max(0, row - 1); i <= min(rows - 1, row + 1); i++) {
+                    for (int j = max(0, col - 1); j <= min(cols - 1, col + 1); j++) {
+                        if (!(i == row && j == col)) {
+                        	// this exposes some of the neighbouring cells 
+                            exposeCell(i, j);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+	// flags a cell
+    void flagCell(int row, int col) {
+        if (row >= 0 && row < rows && col >= 0 && col < cols) {
+            cells[row][col]->flag();
+        }
+    }
+
+    bool isGameOver() {
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+            	//if the cell is exposed and has a mine on it then return true
+                if (cells[i][j]->isCellExposed() && cells[i][j]->hasMine()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    bool isGameWon() {
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+            	// if all cells are exposed and none is a mine then returns true
+                if (!cells[i][j]->isCellExposed() && !cells[i][j]->hasMine()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    void printBoard() {
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (cells[i][j]->isCellExposed()) {
+                	// if cell is exposed and has mine display M
+                    if (cells[i][j]->hasMine()) {
+                        cout << "M ";
+                    // if not a mine then display adjacent mines using function
+                    } else {
+                        cout << cells[i][j]->getAdjacentMines() << " ";
+                    }
+                    //if input is a flag then display F
+                } else if (cells[i][j]->hasFlag()) {
+                    cout << "F ";
+                    // display normal
+                } else {
+                    cout << "# ";
+                }
+            }
+            cout << endl;
+        }
+    }
+};
+
+
+class Game {
+public:
+    Board board;
+    int difficulty;
+    time_t startTime;
+	
+	// to change size of board and add new difficulty
+	
+    Game(int difficulty) : difficulty(difficulty), board(16, 16) { 
+        startTime = time(0);
+        int numMines = 0;
+        if(difficulty == 1){
+        	numMines = 10;
+		}
+		else if(difficulty == 2){
+        	numMines = 40;
+		}
+		else if(difficulty == 3){
+        	numMines = 99;
+		}
+        board.placeMines(numMines);
+    }
+
+    void start() {
+        while (true) {
+            board.printBoard();
+            int row, col;
+            char action;
+            cout << "Enter row, column, and action (L for left click, R for right click): ";
+            cin >> row >> col >> action;
+            // if L then expose cell
+            if (action == 'L') {
+                board.exposeCell(row, col);
+            } 
+			// if R then put flag
+			else if (action == 'R') {
+                board.flagCell(row, col);
+            }
+            
+            time_t currentTime = time(0);
+            double elapsedSeconds = difftime(currentTime, startTime);
+            cout << "Elapsed time: " << elapsedSeconds << " seconds" << endl;
+            
+            // if game over is true then output game over
+            if (board.isGameOver()) {
+                cout << "Game over!" << endl;
+                cout <<"Time taken by user 1 is: " << difftime(time(0), startTime)  << " seconds." << endl;
+                break;
+            } 
+			// if game won then output game won
+			else if (board.isGameWon()) {
+                cout << "Congratulations, you won!" << endl;
+                 cout <<"Time taken by user 1 is: " << difftime(time(0), startTime)  << " seconds." << endl; 
+                 break;
+            }
+        }
+    }
+};
+
+int main(){
+    int difficulty;
+    cout <<"______________________________Welcome to MineSweeper!________________________________________" << endl << endl;
+    int choice = 0;
+    cout << "Enter Token to play the game( 1 to play and 0 to exit ): ";
+	cin >> choice; 
+    while(choice){
+    	cout << "Enter difficulty level: ";
+    	cin >> difficulty;
+    	Game game(difficulty);
+    	game.start();
+    	cout <<"Enter 1 if you want to play agian or 0 to exit! : " << endl;
+    	cin>> choice;
+    	if(choice == 0){
+    		cout <<"Thanks for playing!" << endl;
+		}
+	}
+    	return 0;
+}
+
